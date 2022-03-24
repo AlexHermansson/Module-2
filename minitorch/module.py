@@ -16,16 +16,24 @@ class Module:
         self.training = True
 
     def modules(self):
-        "Return the direct child modules of this module."
+        """Returns the direct child modules of this module.
+
+        Returns:
+            List of child modules.
+        """
         return self.__dict__["_modules"].values()
 
     def train(self):
         "Set the mode of this module and all descendent modules to `train`."
-        raise NotImplementedError('Need to include this file from past assignment.')
+        self.training = True
+        for module in self.modules():
+            module.train()
 
     def eval(self):
         "Set the mode of this module and all descendent modules to `eval`."
-        raise NotImplementedError('Need to include this file from past assignment.')
+        self.training = False
+        for module in self.modules():
+            module.eval()
 
     def named_parameters(self):
         """
@@ -35,11 +43,30 @@ class Module:
         Returns:
             list of pairs: Contains the name and :class:`Parameter` of each ancestor parameter.
         """
-        raise NotImplementedError('Need to include this file from past assignment.')
+        np = list(self._parameters.items())
+        for module_name, module in self._modules.items():
+            np_module = [
+                (module_name + "." + param_name, param)
+                for param_name, param in module.named_parameters()
+            ]
+
+            np += np_module  # concatenate
+
+        return np
 
     def parameters(self):
-        "Enumerate over all the parameters of this module and its descendents."
-        raise NotImplementedError('Need to include this file from past assignment.')
+        """
+        Enumerate over all the parameters of this module and its descendents.
+
+        Returns:
+            List of all parameters, including all child modules
+        """
+        # return [x[1] for x in self.named_parameters()]
+        params = list(self._parameters.values())
+        for module in self.modules():
+            params += module.parameters()  # concatenate
+
+        return params
 
     def add_parameter(self, k, v):
         """
@@ -78,12 +105,12 @@ class Module:
         assert False, "Not Implemented"
 
     def __repr__(self):
-        def _addindent(s_, numSpaces):
+        def _addindent(s_, num_spaces):
             s = s_.split("\n")
             if len(s) == 1:
                 return s_
             first = s.pop(0)
-            s = [(numSpaces * " ") + line for line in s]
+            s = [(num_spaces * " ") + line for line in s]
             s = "\n".join(s)
             s = first + "\n" + s
             return s
@@ -122,7 +149,12 @@ class Parameter:
                 self.value.name = self.name
 
     def update(self, x):
-        "Update the parameter value."
+        """
+        Update the parameter value.
+
+        Args:
+            x (numerical): updated value of parameter
+        """
         self.value = x
         if hasattr(x, "requires_grad_"):
             self.value.requires_grad_(True)

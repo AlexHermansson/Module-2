@@ -190,7 +190,8 @@ class History:
         Returns:
             list of numbers : a derivative with respect to `inputs`
         """
-        raise NotImplementedError('Need to include this file from past assignment.')
+
+        return self.last_fn.chain_rule(self.ctx, self.inputs, d_output)
 
 
 class FunctionBase:
@@ -272,10 +273,16 @@ class FunctionBase:
         """
         # Tip: Note when implementing this function that
         # cls.backward may return either a value or a tuple.
-        raise NotImplementedError('Need to include this file from past assignment.')
+
+        derivatives = wrap_tuple(cls.backward(ctx, d_output))
+        return [(xi, d_xi) for (xi, d_xi) in zip(inputs, derivatives) if is_variable(xi)]
 
 
 # Algorithms for backpropagation
+
+def is_variable(val):
+    # my own
+    return not is_constant(val)
 
 
 def is_constant(val):
@@ -293,7 +300,23 @@ def topological_sort(variable):
         list of Variables : Non-constant Variables in topological order
                             starting from the right.
     """
-    raise NotImplementedError('Need to include this file from past assignment.')
+
+    def visit(var, out):
+        out.append(var)
+
+        if var.is_leaf():  # base case
+            return
+
+        # else recurse and visit child nodes (var.history.inputs)
+        # wrap_tuple in case only one child node
+        for prev_var in wrap_tuple(var.history.inputs):
+            if is_variable(prev_var):  # only check actual variable child nodes
+                visit(prev_var, out)
+
+    output = []
+    visit(variable, output)
+
+    return output
 
 
 def backpropagate(variable, deriv):
@@ -309,4 +332,17 @@ def backpropagate(variable, deriv):
 
     No return. Should write to its results to the derivative values of each leaf through `accumulate_derivative`.
     """
-    raise NotImplementedError('Need to include this file from past assignment.')
+
+    assert is_variable(variable)
+
+    ordered_vars = topological_sort(variable)  # make sure we visit right/parent nodes first
+    grad_dict = {v.unique_id: 0 for v in ordered_vars}
+    grad_dict[variable.unique_id] = deriv
+    for var in ordered_vars:
+        grad = grad_dict[var.unique_id]
+        if var.is_leaf():
+            var.accumulate_derivative(grad)
+        else:
+            back = var.history.backprop_step(grad)  # [(v1, d1), ..., (vn, dn)], v is var, d is derivative
+            for v, d in back:
+                grad_dict[v.unique_id] = d  # update the dict holding gradients
